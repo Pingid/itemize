@@ -1,0 +1,14 @@
+[package]
+name = "itemize"
+version = "0.0.1"
+edition = "2024"
+
+[features]
+# IntoItems is always available; rows are feature-gated.
+default = ["into_rows", "into_rows_variadic"]
+
+# Enables IntoRows / TryIntoRows
+into_rows = []
+
+# Enables IntoVariadicRows / TryIntoVariadicRows (and IntoRows)
+into_rows_variadic = ["into_rows"]
