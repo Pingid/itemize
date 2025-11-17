@@ -1,0 +1,9 @@
+[package]
+name = "itemize"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = ["into_rows", "into_rows_variadic"]
+into_rows = []
+into_rows_variadic = ["into_rows"]
