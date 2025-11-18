@@ -5,3 +5,10 @@ version = 4
 [[package]]
 name = "itemize"
 version = "0.1.0"
+dependencies = [
+ "itemize_derive",
+]
+
+[[package]]
+name = "itemize_derive"
+version = "0.1.0"

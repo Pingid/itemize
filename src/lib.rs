@@ -8,6 +8,9 @@ mod into_rows;
 #[cfg(feature = "into_rows")]
 pub use into_rows::*;
 
+#[cfg(feature = "derive")]
+pub use itemize_derive::*;
+
 #[macro_export]
 macro_rules! derive_item_conversions {
     ($for:ty => $lifetime:lifetime $type:ty $(, $($rest:tt)*)?) => {

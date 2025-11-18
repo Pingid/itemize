@@ -7,3 +7,7 @@ edition = "2024"
 default = ["into_rows", "into_rows_variadic"]
 into_rows = []
 into_rows_variadic = ["into_rows"]
+derive = ["itemize_derive"]
+
+[dependencies]
+itemize_derive = { path = "itemize_derive", optional = true }
