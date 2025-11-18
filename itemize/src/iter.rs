@@ -1,53 +1,3 @@
-//! # Internal iteration helper trait
-//!
-//! This module provides the `ItemsFromIter` trait, which serves as an intermediary
-//! to solve Rust's trait coherence issues when implementing conversion traits.
-//!
-//! ## The Coherence Problem
-//!
-//! We want to provide blanket implementations for our traits (`IntoItems` and `IntoRows`)
-//! that work with any collection type. The natural approach would be:
-//!
-//! ```rust,ignore
-//! impl<T, R, C> IntoItems<T> for C
-//! where
-//!     C: IntoIterator<Item = R>,
-//!     R: From<T>,
-//! {
-//!     // implementation...
-//! }
-//! ```
-//!
-//! However, this creates a trait coherence conflict with tuple implementations.
-//! Tuples like `(A, B)` need to implement:
-//! 1. `IntoItems<T>` directly - to convert tuple elements into an iterator
-//! 2. They also *could* implement `IntoIterator` (though they don't currently in std)
-//!
-//! Rust's orphan rules prevent this because the compiler must consider that tuples
-//! might implement `IntoIterator` in future versions of the standard library, leading to:
-//!
-//! ```text
-//! conflicting implementation for `(_, _)`
-//! = note: upstream crates may add a new impl of trait `std::iter::IntoIterator`
-//!         for type `(_, _)` in future versions
-//! ```
-//!
-//! ## The Solution: ItemsFromIter
-//!
-//! `ItemsFromIter` is our custom trait that provides similar functionality to
-//! `IntoIterator`, but since we control it, we can:
-//!
-//! 1. Implement it only for collection types (Vec, HashSet, etc.)
-//! 2. NOT implement it for multi-element tuples
-//! 3. Use it as a bound in blanket implementations without conflicts
-//!
-//! This allows us to have both:
-//! - Blanket implementations for all collections via `ItemsFromIter`
-//! - Direct implementations for tuples without coherence issues
-//!
-//! The trait is intentionally kept minimal and internal - it's just a bridge
-//! to enable the blanket implementations while avoiding coherence conflicts.
-
 /// A trait for types that can produce an iterator of their items.
 ///
 /// This is an internal trait used to enable blanket implementations
@@ -56,14 +6,6 @@ pub trait ItemsFromIter {
     type Item;
     type IntoIter: Iterator<Item = Self::Item>;
     fn items_from_iter(self) -> Self::IntoIter;
-}
-
-impl<T> ItemsFromIter for (T,) {
-    type Item = T;
-    type IntoIter = std::iter::Once<T>;
-    fn items_from_iter(self) -> Self::IntoIter {
-        std::iter::once(self.0)
-    }
 }
 
 impl<T> ItemsFromIter for Option<T> {

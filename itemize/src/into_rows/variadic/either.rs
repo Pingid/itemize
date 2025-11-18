@@ -4,7 +4,6 @@
 /// enabling heterogeneous collections where different rows may come from different
 /// concrete iterator types. The Either type implements Iterator when both variants
 /// yield the same item type.
-/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Either<L, R> {
     Left(L),

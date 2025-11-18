@@ -2,10 +2,10 @@ use crate::iter::ItemsFromIter;
 
 mod tuples;
 
-/// A trait for converting collections into an iterator of a target type `T`.
+/// Consume or borrow an input and yield an iterator of `T`.
 ///
-/// This trait provides a way to consume or borrow a collection and produce an iterator
-/// that converts each element to type `T` using the `From` trait.
+/// Implementations exist for tuples, collections, and references so APIs can accept
+/// whichever shape is convenient for the caller while you always receive `T`.
 pub trait IntoItems<T> {
     type IntoIter: Iterator<Item = T>;
     fn into_items(self) -> Self::IntoIter;
@@ -30,6 +30,7 @@ where
     }
 }
 
+/// Fallible counterpart to [`IntoItems`] that surfaces conversion errors directly.
 pub trait TryIntoItems<T, E> {
     type IntoIter: Iterator<Item = Result<T, E>>;
     fn try_into_items(self) -> Self::IntoIter;

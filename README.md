@@ -1,85 +1,109 @@
 # itemize
 
-`itemize` lets you write APIs that accept tuples, collections, or single values while receiving a predictable iterator shape inside your function.
+# itemize
 
-## Core traits
+`itemize` lets you write APIs that accept single values, tuples, or collections
+(and even nested collections) while you work with a predictable iterator type
+inside your function.
 
-- `IntoItems<T>` turns 1D inputs into an iterator of `T`.
-- `IntoRows<T>` lifts nested inputs into iterators of rows; enable `hetero` to mix lengths, or `dynamic` / `variadic` for alternate strategies.
-- `impl_into_items!` and `impl_into_rows!` opt single-value types into the traits.
+## Install
+
+```bash
+cargo add --git https://github.com/Pingid/join
+```
+
+## Library
+
+- `IntoItems<T>` / `TryIntoItems<T, E>` – flatten 1D inputs into `Iterator<Item = T>`.
+- `IntoRows<T>` / `TryIntoRows<T, E>` – flatten 2D inputs into `Iterator<Item = RowIter>`.
+- `IntoVariadicRows<T>` / `TryIntoVariadicRows<T, E>` – like `IntoRows`, but rows can be
+  different concrete collection types.
+
+Common std types like `Vec`, arrays, slices, `Option`, `Result`, `HashSet`,
+`BTreeMap`, `VecDeque`, `Box<…>`, etc. work out of the box.
 
 ## Example
 
 ```rust
-use itemize::IntoItems;
+use itemize::{TryIntoItems, TryIntoVariadicRows};
 
-struct UserId(u64);
+#[derive(Debug)]
+enum ParseError {
+    BadInt(String),
+}
 
-impl From<usize> for UserId {
-    fn from(id: usize) -> Self {
-        UserId(id as u64)
+struct Answer(i64);
+
+impl TryFrom<&str> for Answer {
+    type Error = ParseError;
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        s.parse::<i64>()
+            .map(Answer)
+            .map_err(|_| ParseError::BadInt(s.to_string()))
     }
 }
 
-impl From<i32> for UserId {
-    fn from(id: i32) -> Self {
-        UserId(id as u64)
+impl TryFrom<f64> for Answer {
+    type Error = ParseError;
+    fn try_from(n: f64) -> Result<Self, Self::Error> {
+        Ok(Answer(n as i64))
     }
 }
 
-fn fetch(ids: impl IntoItems<UserId>) -> Vec<UserId> {
-    ids.into_items().collect()
+impl TryFrom<usize> for Answer {
+    type Error = ParseError;
+    fn try_from(n: usize) -> Result<Self, Self::Error> {
+        Ok(Answer(n as i64))
+    }
 }
 
-fetch([1, 2, 3]);
-fetch(vec![1, 2, 3]);
-fetch((4i32, 5, 6));
-```
-
-To support single arguments use macro with types that impl Into<UserId>
-
-```rust
-derive_item_conversions!(UserId => u64, usize, i32)
-
-fetch(1usize)
-fetch(1i32)
-```
-
-To collect 2D inputs use `IntoRows`:
-
-```rust
-use itemize::IntoRows;
-
-fn matrix(data: impl IntoRows<f64>) -> Vec<Vec<f64>> {
-    data.into_rows().map(|row| row.collect()).collect()
+fn parse_ints(inputs: impl TryIntoItems<Answer, ParseError>) -> Result<Vec<Answer>, ParseError> {
+    inputs.try_into_items().collect()
 }
 
-let rows = matrix(((1.0, 2.0), (3.0, 4.0)));
-```
-
-To collect 2D inputs into iter of variadic iterators use `IntoVariadicRows`:
-
-```rust
-use itemize::IntoVariadicRows;
-
-fn matrix(data: impl IntoVariadicRows<f64>) -> Vec<Vec<f64>> {
-    data.into_rows().map(|row| row.collect()).collect()
+fn parse_int_rows(
+    inputs: impl TryIntoVariadicRows<Answer, ParseError>,
+) -> Vec<Result<Vec<Answer>, ParseError>> {
+    inputs
+        .try_into_variadic_rows()
+        .map(|rows| rows.collect())
+        .collect()
 }
 
-let rows = matrix(((1.0, 2.0), (3.0, 4.0, 5.0)));
+fn demo() -> Result<(), ParseError> {
+    // works with Vec<String>
+    let values = parse_ints(["1", "2", "3"]);
+    let more = parse_ints(("1", 2, 3.0))?;
+    let single = parse_ints(("1",))?;
+    let rows = parse_int_rows((("1", 2, 3.0), ("4", "5")));
+    Ok(())
+}
 ```
 
-## Installation
+## Feature flags
 
 ```toml
-[dependencies]
-itemize = "0.1"
+# default: everything on
+itemize = { version = "0.1" }
+
+# or be explicit
+itemize = { version = "0.1", default-features = false, features = ["into_rows", "into_rows_variadic"] }
 ```
 
-Feature flags:
+- `into_rows` – enables `IntoRows` / `TryIntoRows`.
+- `into_rows_variadic` – enables `IntoVariadicRows` / `TryIntoVariadicRows` and the `Either` type.
 
-- `into_items` – enable `IntoItems`.
-- `into_rows` – enable `IntoRows`.
-- `variadic` – enable `IntoVariadicRows`.
+`IntoItems` / `TryIntoItems` are always available.
 
-Tuple implementations are generated up to `INTO_VEC_MAX_TUPLE_SIZE` (default 12). Override the limit by setting that environment variable at build time.
+---
+
+## Tuple support
+
+Tuple implementations for all traits are code-generated up to the arity given  
+by the `INTO_VEC_MAX_TUPLE_SIZE` environment variable (default: `12`):
+
+```bash
+INTO_VEC_MAX_TUPLE_SIZE=8 cargo build
+```
+
+This affects tuples for `IntoItems`, `IntoRows` and `IntoVariadicRows`.

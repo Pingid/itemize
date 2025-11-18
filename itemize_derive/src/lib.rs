@@ -1,14 +1,14 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
+use proc_macro::TokenStream;
+
+mod into_items;
+mod into_rows;
+
+#[proc_macro_derive(IntoItems, attributes(into_items))]
+pub fn derive_into_items(input: TokenStream) -> TokenStream {
+    into_items::handle_derive_into_items(input)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+#[proc_macro_derive(IntoRows, attributes(into_rows))]
+pub fn derive_into_rows(input: TokenStream) -> TokenStream {
+    into_rows::handle_derive_into_rows(input)
 }
