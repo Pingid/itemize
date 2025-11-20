@@ -5,12 +5,10 @@ use syn::{DeriveInput, parse_macro_input};
 mod collections;
 mod context;
 mod tuples;
-mod types;
 
 use collections::from_collections;
 use context::Context;
 use tuples::from_tuples;
-use types::from_type;
 
 pub fn handle_derive(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
@@ -23,7 +21,6 @@ pub fn handle_derive(input: TokenStream) -> TokenStream {
     let where_clause = &context.where_clause;
     let ident = &context.ident;
 
-    let from_type_impls = from_type(&context);
     let from_tuples_impls = from_tuples(&context);
     let from_collections_impls = from_collections(&context);
 
@@ -36,11 +33,10 @@ pub fn handle_derive(input: TokenStream) -> TokenStream {
             }
         }
 
-        // #from_type_impls
 
-        // #from_tuples_impls
+        #from_tuples_impls
 
-        // #from_collections_impls
+        #from_collections_impls
     };
     TokenStream::from(expanded)
 }

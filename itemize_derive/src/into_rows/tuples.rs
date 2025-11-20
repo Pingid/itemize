@@ -15,21 +15,39 @@ pub fn from_tuples(context: &Context) -> TokenStream {
     // Check if the struct is generic
     if context.generics.params.is_empty() {
         // Non-generic case
-        for n in 1..=max {
-            let type_params: Vec<_> = (0..n).map(|i| format_ident!("A{}", i)).collect();
-            let vars: Vec<_> = (0..n).map(|i| format_ident!("a{}", i)).collect();
-            let len = n;
+        for n in 2..=max {
+            // Generate tuple type parameters
+            let type_params: Vec<_> = (0..n).map(|i| format_ident!("__RowItem{}", i)).collect();
+            let indices: Vec<_> = (0..n).map(|i| syn::Index::from(i)).collect();
+            
+            // For IntoRows, each tuple element becomes a separate row
+            // We need to create an iterator of iterators
+            let array_elements: Vec<_> = indices
+                .iter()
+                .map(|idx| quote! { self.#idx.into_items() })
+                .collect();
+
+            // Create the Rows iterator type - it's an array of row iterators
+            let rows_type = quote! {
+                std::array::IntoIter<
+                    Box<dyn std::iter::Iterator<Item = #ident>>,
+                    #n
+                >
+            };
 
             expanded.extend(quote! {
-                impl<#(#type_params),*> itemize_2::IntoItems<#ident> for (#(#type_params,)*)
+                impl<#(#type_params),*> itemize_2::IntoRows<#ident> for (#(#type_params,)*)
                 where
-                    #(#ident: From<#type_params>,)*
+                    #(#type_params: itemize_2::IntoItems<#ident>,)*
+                    #(<#type_params as itemize_2::IntoItems<#ident>>::IntoIter: 'static,)*
                 {
-                    type IntoIter = std::array::IntoIter<#ident, #len>;
+                    type RowIter = Box<dyn std::iter::Iterator<Item = #ident>>;
+                    type Rows = #rows_type;
 
-                    fn into_items(self) -> Self::IntoIter {
-                        let (#(#vars,)*) = self;
-                        <[#ident; #len]>::into_iter([#(#ident::from(#vars)),*])
+                    fn into_rows(self) -> Self::Rows {
+                        [
+                            #(Box::new(#array_elements) as Box<dyn std::iter::Iterator<Item = #ident>>,)*
+                        ].into_iter()
                     }
                 }
             });
@@ -39,22 +57,39 @@ pub fn from_tuples(context: &Context) -> TokenStream {
         let generic_params = &context.generics.params;
         let where_clause = &context.where_clause;
 
-        for n in 1..=max {
-            let type_params: Vec<_> = (0..n).map(|i| format_ident!("__TupleItem{}", i)).collect();
-            let vars: Vec<_> = (0..n).map(|i| format_ident!("a{}", i)).collect();
-            let len = n;
+        for n in 2..=max {
+            // For tuples, each element must implement IntoItems and becomes a separate row
+            let type_params: Vec<_> = (0..n).map(|i| format_ident!("__RowItem{}", i)).collect();
+            let indices: Vec<_> = (0..n).map(|i| syn::Index::from(i)).collect();
+            
+            // Each tuple element becomes a row
+            let array_elements: Vec<_> = indices
+                .iter()
+                .map(|idx| quote! { self.#idx.into_items() })
+                .collect();
+
+            // Create the Rows iterator type
+            let rows_type = quote! {
+                std::array::IntoIter<
+                    Box<dyn std::iter::Iterator<Item = #ident #ty_generics>>,
+                    #n
+                >
+            };
 
             expanded.extend(quote! {
-                impl<#(#type_params,)* #generic_params> itemize_2::IntoItems<#ident #ty_generics> for (#(#type_params,)*)
+                impl<#(#type_params,)* #generic_params> itemize_2::IntoRows<#ident #ty_generics> for (#(#type_params,)*)
                 #where_clause
                 where
-                    #(#ident #ty_generics: From<#type_params>,)*
+                    #(#type_params: itemize_2::IntoItems<#ident #ty_generics>,)*
+                    #(<#type_params as itemize_2::IntoItems<#ident #ty_generics>>::IntoIter: 'static,)*
                 {
-                    type IntoIter = std::array::IntoIter<#ident #ty_generics, #len>;
+                    type RowIter = Box<dyn std::iter::Iterator<Item = #ident #ty_generics>>;
+                    type Rows = #rows_type;
 
-                    fn into_items(self) -> Self::IntoIter {
-                        let (#(#vars,)*) = self;
-                        <[#ident #ty_generics; #len]>::into_iter([#(#ident::from(#vars)),*])
+                    fn into_rows(self) -> Self::Rows {
+                        [
+                            #(Box::new(#array_elements) as Box<dyn std::iter::Iterator<Item = #ident #ty_generics>>,)*
+                        ].into_iter()
                     }
                 }
             });

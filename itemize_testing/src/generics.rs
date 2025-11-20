@@ -20,17 +20,6 @@ where
     }
 }
 
-// impl<T, U> itemize_2::IntoRows<MySimpleType<T>> for Vec<U>
-// where
-//     U: IntoItems<MySimpleType<T>>,
-// {
-//     type RowIter = <U as IntoItems<MySimpleType<T>>>::IntoIter;
-//     type Rows = std::iter::Map<<U as IntoItems<MySimpleType<T>>>::IntoIter, fn(U) -> Self::RowIter>;
-//     fn into_rows(self) -> Self::Rows {
-//         self.into_iter().map(|item| item.into_items())
-//     }
-// }
-
 #[test]
 fn test_into_items() {
     fn into_items(x: impl itemize_2::IntoItems<MySimpleType<String>>) -> Vec<MySimpleType<String>> {
@@ -50,7 +39,8 @@ fn test_into_items() {
         x.into_rows().map(|row| row.collect()).collect()
     }
     let _ = into_rows(MySimpleType("hello".to_string()));
-    // let _ = into_rows("hello".to_string());
-    // let _ = into_rows((('a', 'b'), ('c', 'd')));
-    // let _ = into_rows([["a", "b", "c"], ["d", "e", "f"]]);
+    let _ = into_rows((("a", "b"), ("c", "d")));
+    let _ = into_rows([["a", "b", "c"], ["d", "e", "f"]]);
+    let _ = into_rows(vec![["a", "b", "c"], ["d", "e", "f"]]);
+    let _ = into_rows(vec![vec!["a", "b", "c"], vec!["d", "e", "f"]]);
 }

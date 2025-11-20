@@ -42,15 +42,22 @@ fn generate_vec_impl(context: &Context) -> TokenStream {
 
     // Check if the struct is generic
     if context.generics.params.is_empty() {
-        // Non-generic case - use the simple type
+        // Non-generic case
         quote! {
-            impl<T> itemize_2::IntoItems<#ident> for Vec<T>
+            impl<__RowItem> itemize_2::IntoRows<#ident> for Vec<__RowItem>
             where
-                #ident: From<T>,
+                __RowItem: itemize_2::IntoItems<#ident>,
             {
-                type IntoIter = std::iter::Map<std::vec::IntoIter<T>, fn(T) -> #ident>;
-                fn into_items(self) -> Self::IntoIter {
-                    self.into_iter().map(#ident::from as fn(T) -> #ident)
+                type RowIter = <__RowItem as itemize_2::IntoItems<#ident>>::IntoIter;
+                type Rows = std::iter::Map<std::vec::IntoIter<__RowItem>, fn(__RowItem) -> Self::RowIter>;
+                fn into_rows(self) -> Self::Rows {
+                    fn map_row<Target, Item>(item: Item) -> <Item as itemize_2::IntoItems<Target>>::IntoIter
+                    where
+                        Item: itemize_2::IntoItems<Target>,
+                    {
+                        item.into_items()
+                    }
+                    self.into_iter().map(map_row::<#ident, __RowItem>)
                 }
             }
         }
@@ -60,14 +67,21 @@ fn generate_vec_impl(context: &Context) -> TokenStream {
         let where_clause = &context.where_clause;
 
         quote! {
-            impl<__CollectionItem, #generic_params> itemize_2::IntoItems<#ident #ty_generics> for Vec<__CollectionItem>
+            impl<__RowItem, #generic_params> itemize_2::IntoRows<#ident #ty_generics> for Vec<__RowItem>
             #where_clause
             where
-                #ident #ty_generics: From<__CollectionItem>,
+                __RowItem: itemize_2::IntoItems<#ident #ty_generics>,
             {
-                type IntoIter = std::iter::Map<std::vec::IntoIter<__CollectionItem>, fn(__CollectionItem) -> #ident #ty_generics>;
-                fn into_items(self) -> Self::IntoIter {
-                    self.into_iter().map(#ident::from as fn(__CollectionItem) -> #ident #ty_generics)
+                type RowIter = <__RowItem as itemize_2::IntoItems<#ident #ty_generics>>::IntoIter;
+                type Rows = std::iter::Map<std::vec::IntoIter<__RowItem>, fn(__RowItem) -> Self::RowIter>;
+                fn into_rows(self) -> Self::Rows {
+                    fn map_row<Target, Item>(item: Item) -> <Item as itemize_2::IntoItems<Target>>::IntoIter
+                    where
+                        Item: itemize_2::IntoItems<Target>,
+                    {
+                        item.into_items()
+                    }
+                    self.into_iter().map(map_row::<#ident #ty_generics, __RowItem>)
                 }
             }
         }
@@ -80,15 +94,22 @@ fn generate_slice_impl(context: &Context) -> TokenStream {
 
     // Check if the struct is generic
     if context.generics.params.is_empty() {
-        // Non-generic case - use the simple type
+        // Non-generic case
         quote! {
-            impl<'a, T> itemize_2::IntoItems<#ident> for &'a [T]
+            impl<'a, __RowItem> itemize_2::IntoRows<#ident> for &'a [__RowItem]
             where
-                #ident: From<&'a T>,
+                &'a __RowItem: itemize_2::IntoItems<#ident>,
             {
-                type IntoIter = std::iter::Map<std::slice::Iter<'a, T>, fn(&'a T) -> #ident>;
-                fn into_items(self) -> Self::IntoIter {
-                    self.iter().map(#ident::from as fn(&'a T) -> #ident)
+                type RowIter = <&'a __RowItem as itemize_2::IntoItems<#ident>>::IntoIter;
+                type Rows = std::iter::Map<std::slice::Iter<'a, __RowItem>, fn(&'a __RowItem) -> Self::RowIter>;
+                fn into_rows(self) -> Self::Rows {
+                    fn map_row<Target, Item>(item: Item) -> <Item as itemize_2::IntoItems<Target>>::IntoIter
+                    where
+                        Item: itemize_2::IntoItems<Target>,
+                    {
+                        item.into_items()
+                    }
+                    self.iter().map(map_row::<#ident, &__RowItem>)
                 }
             }
         }
@@ -98,14 +119,21 @@ fn generate_slice_impl(context: &Context) -> TokenStream {
         let where_clause = &context.where_clause;
 
         quote! {
-            impl<'a, __CollectionItem, #generic_params> itemize_2::IntoItems<#ident #ty_generics> for &'a [__CollectionItem]
+            impl<'a, __RowItem, #generic_params> itemize_2::IntoRows<#ident #ty_generics> for &'a [__RowItem]
             #where_clause
             where
-                #ident #ty_generics: From<&'a __CollectionItem>,
+                &'a __RowItem: itemize_2::IntoItems<#ident #ty_generics>,
             {
-                type IntoIter = std::iter::Map<std::slice::Iter<'a, __CollectionItem>, fn(&'a __CollectionItem) -> #ident #ty_generics>;
-                fn into_items(self) -> Self::IntoIter {
-                    self.iter().map(#ident::from as fn(&'a __CollectionItem) -> #ident #ty_generics)
+                type RowIter = <&'a __RowItem as itemize_2::IntoItems<#ident #ty_generics>>::IntoIter;
+                type Rows = std::iter::Map<std::slice::Iter<'a, __RowItem>, fn(&'a __RowItem) -> Self::RowIter>;
+                fn into_rows(self) -> Self::Rows {
+                    fn map_row<Target, Item>(item: Item) -> <Item as itemize_2::IntoItems<Target>>::IntoIter
+                    where
+                        Item: itemize_2::IntoItems<Target>,
+                    {
+                        item.into_items()
+                    }
+                    self.iter().map(map_row::<#ident #ty_generics, &__RowItem>)
                 }
             }
         }
@@ -118,15 +146,22 @@ fn generate_array_impl(context: &Context) -> TokenStream {
 
     // Check if the struct is generic
     if context.generics.params.is_empty() {
-        // Non-generic case - use the simple type
+        // Non-generic case
         quote! {
-            impl<T, const N: usize> itemize_2::IntoItems<#ident> for [T; N]
+            impl<__RowItem, const N: usize> itemize_2::IntoRows<#ident> for [__RowItem; N]
             where
-                #ident: From<T>,
+                __RowItem: itemize_2::IntoItems<#ident>,
             {
-                type IntoIter = std::iter::Map<std::array::IntoIter<T, N>, fn(T) -> #ident>;
-                fn into_items(self) -> Self::IntoIter {
-                    IntoIterator::into_iter(self).map(#ident::from as fn(T) -> #ident)
+                type RowIter = <__RowItem as itemize_2::IntoItems<#ident>>::IntoIter;
+                type Rows = std::iter::Map<std::array::IntoIter<__RowItem, N>, fn(__RowItem) -> Self::RowIter>;
+                fn into_rows(self) -> Self::Rows {
+                    fn map_row<Target, Item>(item: Item) -> <Item as itemize_2::IntoItems<Target>>::IntoIter
+                    where
+                        Item: itemize_2::IntoItems<Target>,
+                    {
+                        item.into_items()
+                    }
+                    IntoIterator::into_iter(self).map(map_row::<#ident, __RowItem>)
                 }
             }
         }
@@ -136,14 +171,21 @@ fn generate_array_impl(context: &Context) -> TokenStream {
         let where_clause = &context.where_clause;
 
         quote! {
-            impl<__CollectionItem, const N: usize, #generic_params> itemize_2::IntoItems<#ident #ty_generics> for [__CollectionItem; N]
+            impl<__RowItem, const N: usize, #generic_params> itemize_2::IntoRows<#ident #ty_generics> for [__RowItem; N]
             #where_clause
             where
-                #ident #ty_generics: From<__CollectionItem>,
+                __RowItem: itemize_2::IntoItems<#ident #ty_generics>,
             {
-                type IntoIter = std::iter::Map<std::array::IntoIter<__CollectionItem, N>, fn(__CollectionItem) -> #ident #ty_generics>;
-                fn into_items(self) -> Self::IntoIter {
-                    IntoIterator::into_iter(self).map(#ident::from as fn(__CollectionItem) -> #ident #ty_generics)
+                type RowIter = <__RowItem as itemize_2::IntoItems<#ident #ty_generics>>::IntoIter;
+                type Rows = std::iter::Map<std::array::IntoIter<__RowItem, N>, fn(__RowItem) -> Self::RowIter>;
+                fn into_rows(self) -> Self::Rows {
+                    fn map_row<Target, Item>(item: Item) -> <Item as itemize_2::IntoItems<Target>>::IntoIter
+                    where
+                        Item: itemize_2::IntoItems<Target>,
+                    {
+                        item.into_items()
+                    }
+                    IntoIterator::into_iter(self).map(map_row::<#ident #ty_generics, __RowItem>)
                 }
             }
         }
