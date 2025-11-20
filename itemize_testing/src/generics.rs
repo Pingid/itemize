@@ -1,13 +1,12 @@
 #![allow(warnings)]
 
-use itemize::IntoItems;
 use itemize_derive::*;
 
 #[derive(IntoItems, IntoRows)]
 #[items_from(
     types(String, char),
     tuples(2),
-    collections(Vec<T>, &[T], [T; N])
+    collections(&Vec<T>, Vec<T>, &[T], [T; N])
 )]
 pub struct MySimpleType<T>(T);
 
@@ -31,6 +30,7 @@ fn test_into_items() {
     let _ = into_items(("1",));
     let _ = into_items(("1", "2"));
     let _ = into_items(vec!["4", "5", "6"]);
+    // let _ = into_items(&vec!["4", "5", "6"]);
     let _ = into_items(["a", "b", "c"]);
 
     fn into_rows(
@@ -43,4 +43,5 @@ fn test_into_items() {
     let _ = into_rows([["a", "b", "c"], ["d", "e", "f"]]);
     let _ = into_rows(vec![["a", "b", "c"], ["d", "e", "f"]]);
     let _ = into_rows(vec![vec!["a", "b", "c"], vec!["d", "e", "f"]]);
+    // let _ = into_rows(vec![&vec!["a", "b", "c"], &vec!["d", "e", "f"]]);
 }

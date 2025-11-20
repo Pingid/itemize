@@ -21,7 +21,9 @@ fn generate_collection_impl(context: &Context, collection_tokens: &TokenStream) 
     let collection_str = collection_tokens.to_string();
 
     // Handle different collection types
-    if collection_str.starts_with("Vec") {
+    if collection_str.starts_with("& Vec") || collection_str.starts_with("&Vec") {
+        generate_vec_ref_impl(&context)
+    } else if collection_str.starts_with("Vec") {
         generate_vec_impl(&context)
     } else if collection_str.starts_with("& [")
         || collection_str.starts_with("&[")
@@ -33,6 +35,44 @@ fn generate_collection_impl(context: &Context, collection_tokens: &TokenStream) 
     } else {
         // Default case - should not happen with the expected inputs
         quote! {}
+    }
+}
+
+fn generate_vec_ref_impl(context: &Context) -> TokenStream {
+    let ident = &context.ident;
+    let ty_generics = &context.ty_generics;
+
+    // Check if the struct is generic
+    if context.generics.params.is_empty() {
+        // Non-generic case - use the simple type
+        quote! {
+            impl<'a, T> itemize_2::IntoItems<#ident> for &'a Vec<T>
+            where
+                #ident: From<&'a T>,
+            {
+                type IntoIter = std::iter::Map<std::slice::Iter<'a, T>, fn(&'a T) -> #ident>;
+                fn into_items(self) -> Self::IntoIter {
+                    self.iter().map(#ident::from as fn(&'a T) -> #ident)
+                }
+            }
+        }
+    } else {
+        // Generic case - use the generic params directly
+        let generic_params = &context.generics.params;
+        let where_clause = &context.where_clause;
+
+        quote! {
+            impl<'a, __CollectionItem, #generic_params> itemize_2::IntoItems<#ident #ty_generics> for &'a Vec<__CollectionItem>
+            #where_clause
+            where
+                #ident #ty_generics: From<&'a __CollectionItem>,
+            {
+                type IntoIter = std::iter::Map<std::slice::Iter<'a, __CollectionItem>, fn(&'a __CollectionItem) -> #ident #ty_generics>;
+                fn into_items(self) -> Self::IntoIter {
+                    self.iter().map(#ident::from as fn(&'a __CollectionItem) -> #ident #ty_generics)
+                }
+            }
+        }
     }
 }
 

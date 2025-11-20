@@ -3,10 +3,10 @@
 use itemize_derive::*;
 
 #[derive(IntoItems)]
-#[into_items(
-    from_types(&str, String, i32, f64),
-    from_tuples(2),
-    from_collections(Vec<T>, &[T], [T; N])
+#[items_from(
+    types(&str, String, i32, f64),
+    tuples(2),
+    collections(Vec<T>, &[T], [T; N])
 )]
 pub struct MySimpleType(String);
 
