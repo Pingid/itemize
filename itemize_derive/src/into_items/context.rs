@@ -1,4 +1,4 @@
-use quote::{ToTokens, format_ident};
+use quote::ToTokens;
 use syn::parse::Parser;
 use syn::{
     Attribute, DeriveInput, ExprArray, ImplGenerics, Meta, MetaList, MetaNameValue, TypeGenerics,
@@ -12,6 +12,7 @@ pub struct Context<'a> {
     pub ty_generics: TypeGenerics<'a>,
     pub where_clause: Option<&'a WhereClause>,
     pub vis: &'a syn::Visibility,
+    pub generics: &'a syn::Generics,
 }
 
 impl<'a> Context<'a> {
@@ -37,6 +38,7 @@ impl<'a> Context<'a> {
             ty_generics,
             where_clause,
             vis: &ast.vis,
+            generics: &ast.generics,
         })
     }
 }
@@ -44,14 +46,14 @@ impl<'a> Context<'a> {
 /// Example:
 /// ```ignore
 /// #[derive(IntoItems)]
-/// #[into_items(from_types = [&str, String, i32, f64], from_tuples = 2)]
+/// #[into_items(types = [&str, String, i32, f64], tuples = 2)]
 /// pub struct MySimpleType(String);
 /// ```
 #[derive(Default)]
 pub struct Attributes {
-    pub from_types: Vec<syn::Expr>,
-    pub from_tuples: Option<usize>,
-    pub from_collections: Vec<proc_macro2::TokenStream>,
+    pub types: Vec<syn::Expr>,
+    pub tuples: Option<usize>,
+    pub collections: Vec<proc_macro2::TokenStream>,
 }
 
 impl Attributes {
@@ -59,28 +61,28 @@ impl Attributes {
         let mut attributes = Attributes::default();
 
         for attr in attrs {
-            if attr.path().is_ident("into_items") {
+            if attr.path().is_ident("items_from") {
                 let meta_items = attr.parse_args_with(
                     syn::punctuated::Punctuated::<Meta, syn::Token![,]>::parse_terminated,
                 )?;
                 for meta in meta_items {
                     match &meta {
-                        // Handle `from_types = [...]` syntax
+                        // Handle `types = [...]` syntax
                         Meta::NameValue(MetaNameValue { path, value, .. })
-                            if path.is_ident("from_types") =>
+                            if path.is_ident("types") =>
                         {
                             // Expect an array literal `[ ... ]`
-                            let arr: ExprArray = syn::parse2(value.into_token_stream())
-                                    .map_err(|_| syn::Error::new_spanned(
+                            let arr: ExprArray =
+                                syn::parse2(value.into_token_stream()).map_err(|_| {
+                                    syn::Error::new_spanned(
                                         value,
-                                        "expected array literal like [Type1, Type2] for 'from_types'"
-                                    ))?;
-                            attributes.from_types = arr.elems.into_iter().collect();
+                                        "expected array literal like [Type1, Type2] for 'types'",
+                                    )
+                                })?;
+                            attributes.types = arr.elems.into_iter().collect();
                         }
-                        // Handle `from_types(...)` syntax
-                        Meta::List(MetaList { path, tokens, .. })
-                            if path.is_ident("from_types") =>
-                        {
+                        // Handle `types(...)` syntax
+                        Meta::List(MetaList { path, tokens, .. }) if path.is_ident("types") => {
                             // Parse the comma-separated types in parentheses
                             let types: syn::punctuated::Punctuated<syn::Expr, syn::Token![,]> =
                                 syn::punctuated::Punctuated::parse_terminated
@@ -88,14 +90,14 @@ impl Attributes {
                                     .map_err(|_| {
                                         syn::Error::new_spanned(
                                             path,
-                                            "failed to parse types in from_types(...)",
+                                            "failed to parse types in types(...)",
                                         )
                                     })?;
-                            attributes.from_types = types.into_iter().collect();
+                            attributes.types = types.into_iter().collect();
                         }
-                        // Handle `from_tuples = 2` or `from_tuples = [2]` syntax
+                        // Handle `tuples = 2` or `tuples = [2]` syntax
                         Meta::NameValue(MetaNameValue { path, value, .. })
-                            if path.is_ident("from_tuples") =>
+                            if path.is_ident("tuples") =>
                         {
                             if let Ok(arr) = syn::parse2::<ExprArray>(value.into_token_stream()) {
                                 let mut elems = arr.elems.into_iter();
@@ -106,7 +108,7 @@ impl Attributes {
                                     }) = expr
                                     {
                                         if let Ok(v) = lit_int.base10_parse::<usize>() {
-                                            attributes.from_tuples = Some(v);
+                                            attributes.tuples = Some(v);
                                         }
                                     }
                                 }
@@ -118,20 +120,18 @@ impl Attributes {
                                     .map_err(|_| {
                                         syn::Error::new_spanned(
                                             value,
-                                            "expected integer for 'from_tuples'",
+                                            "expected integer for 'tuples'",
                                         )
                                     })?
                                 {
                                     if let Ok(v) = lit_int.base10_parse::<usize>() {
-                                        attributes.from_tuples = Some(v);
+                                        attributes.tuples = Some(v);
                                     }
                                 }
                             }
                         }
-                        // Handle `from_tuples(2)` syntax
-                        Meta::List(MetaList { path, tokens, .. })
-                            if path.is_ident("from_tuples") =>
-                        {
+                        // Handle `tuples(2)` syntax
+                        Meta::List(MetaList { path, tokens, .. }) if path.is_ident("tuples") => {
                             // Parse as a single integer expression
                             if let Ok(expr) = syn::parse2::<syn::Expr>(tokens.clone()) {
                                 if let syn::Expr::Lit(syn::ExprLit {
@@ -140,14 +140,14 @@ impl Attributes {
                                 }) = expr
                                 {
                                     if let Ok(v) = lit_int.base10_parse::<usize>() {
-                                        attributes.from_tuples = Some(v);
+                                        attributes.tuples = Some(v);
                                     }
                                 }
                             }
                         }
-                        // Handle `from_collections(...)` syntax
+                        // Handle `collections(...)` syntax
                         Meta::List(MetaList { path, tokens, .. })
-                            if path.is_ident("from_collections") =>
+                            if path.is_ident("collections") =>
                         {
                             // Split the token stream by commas and store each collection type
                             let tokens_str = tokens.to_string();
@@ -163,12 +163,12 @@ impl Attributes {
                                     })
                                 })
                                 .collect::<Result<Vec<_>, _>>()?;
-                            attributes.from_collections = collection_types;
+                            attributes.collections = collection_types;
                         }
                         _ => {
                             return Err(syn::Error::new_spanned(
                                 &meta,
-                                "unknown attribute parameter; supported parameters are: from_types, from_tuples, from_collections",
+                                "unknown attribute parameter; supported parameters are: types, tuples, collections",
                             ));
                         }
                     }

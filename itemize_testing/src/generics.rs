@@ -3,10 +3,10 @@
 use itemize_derive::*;
 
 #[derive(IntoItems)]
-#[into_items(
-    from_types(&str, String, i32, f64),
-    from_tuples(2),
-    from_collections(Vec<T>, &[T], [T; N])
+#[items_from(
+    types(String, char),
+    tuples(2),
+    collections(Vec<T>, &[T], [T; N])
 )]
 pub struct MySimpleType<T>(T);
 
@@ -24,10 +24,10 @@ fn test_into_items() {
     fn into_items(x: impl itemize_2::IntoItems<MySimpleType<String>>) -> Vec<MySimpleType<String>> {
         x.into_items().collect()
     }
-    let _ = into_items(1);
-    let _ = into_items("1");
+    let _ = into_items(String::from("hello"));
+    let _ = into_items('a');
     let _ = into_items(("1",));
     let _ = into_items(("1", "2"));
     let _ = into_items(vec!["4", "5", "6"]);
-    let _ = into_items([1, 2, 3]);
+    let _ = into_items(["a", "b", "c"]);
 }
