@@ -1,14 +1,12 @@
 #![allow(warnings)]
 
-use itemize_derive::*;
+use itemize::*;
 
 #[derive(IntoItems, IntoRows)]
-#[items_from(
-    types(String, char),
-    tuples(2),
-    collections(&Vec<T>, Vec<T>, &[T], [T; N])
-)]
-pub struct MySimpleType<T>(T);
+#[items_from(types(String, char, &'a str), tuples(2), collections(vec, slice, array))]
+pub struct MySimpleType<T>(T)
+where
+    T: Clone;
 
 impl<T> From<T> for MySimpleType<String>
 where
@@ -21,11 +19,11 @@ where
 
 #[test]
 fn test_into_items() {
-    fn into_items(x: impl itemize_2::IntoItems<MySimpleType<String>>) -> Vec<MySimpleType<String>> {
+    fn into_items(x: impl IntoItems<MySimpleType<String>>) -> Vec<MySimpleType<String>> {
         x.into_items().collect()
     }
 
-    let _ = into_items(String::from("hello"));
+    let _ = into_items("hello");
     let _ = into_items('a');
     let _ = into_items(("1",));
     let _ = into_items(("1", "2"));
@@ -33,9 +31,7 @@ fn test_into_items() {
     // let _ = into_items(&vec!["4", "5", "6"]);
     let _ = into_items(["a", "b", "c"]);
 
-    fn into_rows(
-        x: impl itemize_2::IntoRows<MySimpleType<String>>,
-    ) -> Vec<Vec<MySimpleType<String>>> {
+    fn into_rows(x: impl IntoRows<MySimpleType<String>>) -> Vec<Vec<MySimpleType<String>>> {
         x.into_rows().map(|row| row.collect()).collect()
     }
     let _ = into_rows(MySimpleType("hello".to_string()));

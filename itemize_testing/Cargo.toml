@@ -4,6 +4,4 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-itemize_2 = { path = "../itemize_2" }
-itemize = { path = "../itemize" }
-itemize_derive = { path = "../itemize_derive" }
+itemize = { path = "../itemize", features = ["derive"] }

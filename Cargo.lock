@@ -10,11 +10,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "itemize_2"
+name = "itemize_derive"
 version = "0.1.0"
+dependencies = [
+ "itemize_derive_impl",
+]
 
 [[package]]
-name = "itemize_derive"
+name = "itemize_derive_impl"
 version = "0.1.0"
 dependencies = [
  "proc-macro2",
@@ -27,8 +30,6 @@ name = "itemize_testing"
 version = "0.1.0"
 dependencies = [
  "itemize",
- "itemize_2",
- "itemize_derive",
 ]
 
 [[package]]

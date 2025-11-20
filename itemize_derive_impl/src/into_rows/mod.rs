@@ -1,17 +1,16 @@
-use proc_macro::TokenStream;
+use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{DeriveInput, parse_macro_input};
+
+use crate::context::Context;
 
 mod collections;
-mod context;
 mod tuples;
 
 use collections::from_collections;
-use context::Context;
 use tuples::from_tuples;
 
 pub fn handle_derive(input: TokenStream) -> TokenStream {
-    let ast = parse_macro_input!(input as DeriveInput);
+    let ast = syn::parse2(input).unwrap();
     let context = match Context::try_new(&ast) {
         Ok(ctx) => ctx,
         Err(e) => return e.to_compile_error().into(),
@@ -25,7 +24,7 @@ pub fn handle_derive(input: TokenStream) -> TokenStream {
     let from_collections_impls = from_collections(&context);
 
     let expanded = quote! {
-        impl #impl_generics itemize_2::IntoRows<#ident #ty_generics> for #ident #ty_generics #where_clause {
+        impl #impl_generics itemize::IntoRows<#ident #ty_generics> for #ident #ty_generics #where_clause {
             type RowIter = std::iter::Once<#ident #ty_generics>;
             type Rows = std::iter::Once<Self::RowIter>;
             fn into_rows(self) -> Self::Rows {

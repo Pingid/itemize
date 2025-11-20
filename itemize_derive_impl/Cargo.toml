@@ -1,0 +1,15 @@
+[package]
+name = "itemize_derive_impl"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", default-features = false, features = [
+    "derive",
+    "parsing",
+    "printing",
+    "proc-macro",
+    "clone-impls",
+] }

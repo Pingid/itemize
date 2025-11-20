@@ -1,3 +1,5 @@
 /target
 tuples.rs
-!/itemize_derive/**/tuples.rs
+!/itemize_derive_impl/**/tuples.rs
+itemize_old
+/src
