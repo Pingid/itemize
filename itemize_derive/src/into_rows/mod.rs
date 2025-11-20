@@ -28,18 +28,19 @@ pub fn handle_derive(input: TokenStream) -> TokenStream {
     let from_collections_impls = from_collections(&context);
 
     let expanded = quote! {
-        impl #impl_generics itemize_2::IntoItems<#ident #ty_generics> for #ident #ty_generics #where_clause {
-            type IntoIter = ::std::iter::Once<#ident #ty_generics>;
-            fn into_items(self) -> Self::IntoIter {
-                ::std::iter::once(self)
+        impl #impl_generics itemize_2::IntoRows<#ident #ty_generics> for #ident #ty_generics #where_clause {
+            type RowIter = std::iter::Once<#ident #ty_generics>;
+            type Rows = std::iter::Once<Self::RowIter>;
+            fn into_rows(self) -> Self::Rows {
+                std::iter::once(std::iter::once(self))
             }
         }
 
-        #from_type_impls
+        // #from_type_impls
 
-        #from_tuples_impls
+        // #from_tuples_impls
 
-        #from_collections_impls
+        // #from_collections_impls
     };
     TokenStream::from(expanded)
 }
