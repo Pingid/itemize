@@ -4,9 +4,9 @@ use itemize::*;
 
 #[derive(IntoItems)]
 #[items_from(
-    types(&str, String, i32, f64),
+    types(&'a str, String, i32, f64),
     tuples(2),
-    collections(vec, slice, array)
+    collections(vec, slice, array),
 )]
 pub struct MySimpleType(String);
 

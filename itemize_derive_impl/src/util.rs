@@ -2,6 +2,7 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{ToTokens, format_ident, quote};
 
 use crate::context::Context;
+use crate::trait_config::TraitConfig;
 
 pub(crate) fn impl_generics_tokens(context: &Context, extra: &[TokenStream]) -> TokenStream {
     let mut params: Vec<TokenStream> = extra.to_vec();
@@ -16,14 +17,40 @@ pub(crate) fn impl_generics_tokens(context: &Context, extra: &[TokenStream]) -> 
     }
 }
 
+/// Build impl generics with proper ordering: lifetimes first, then error generic, then type/const params.
+pub(crate) fn build_ordered_impl_generics(
+    context: &Context,
+    config: &TraitConfig,
+    extra_params: &[TokenStream],
+) -> TokenStream {
+    let mut params = Vec::new();
+
+    // 1. Lifetime parameters from extra_params
+    for param in extra_params {
+        if param.to_string().starts_with('\'') {
+            params.push(param.clone());
+        }
+    }
+
+    // 2. Error type parameter (if needed)
+    if config.needs_error_generic() {
+        params.push(config.error_type_tokens());
+    }
+
+    // 3. Non-lifetime parameters from extra_params
+    for param in extra_params {
+        if !param.to_string().starts_with('\'') {
+            params.push(param.clone());
+        }
+    }
+
+    impl_generics_tokens(context, &params)
+}
+
 pub(crate) fn tuple_type_params(prefix: &str, len: usize) -> Vec<Ident> {
     (0..len)
         .map(|index| format_ident!("{}{}", prefix, index))
         .collect()
-}
-
-pub(crate) fn tuple_vars(prefix: &str, len: usize) -> Vec<Ident> {
-    tuple_type_params(prefix, len)
 }
 
 pub(crate) fn combine_where_clause(

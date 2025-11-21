@@ -3,15 +3,13 @@ use std::collections::HashSet;
 use proc_macro2::TokenStream;
 use quote::ToTokens;
 use syn::parse::Parser;
-use syn::{Attribute, DeriveInput, ImplGenerics, Meta, MetaList, TypeGenerics, WhereClause};
+use syn::{Attribute, DeriveInput, Meta, MetaList, TypeGenerics, WhereClause};
 
 pub struct Context<'a> {
     pub attributes: Attributes,
     pub ident: &'a syn::Ident,
-    pub impl_generics: ImplGenerics<'a>,
     pub ty_generics: TypeGenerics<'a>,
     pub where_clause: Option<&'a WhereClause>,
-    pub vis: &'a syn::Visibility,
     pub generics: &'a syn::Generics,
 }
 
@@ -29,15 +27,13 @@ impl<'a> Context<'a> {
         }
 
         let ident = &ast.ident;
-        let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
+        let (_, ty_generics, where_clause) = ast.generics.split_for_impl();
 
         Ok(Self {
             attributes: Attributes::try_from(&ast.attrs)?,
             ident,
-            impl_generics,
             ty_generics,
             where_clause,
-            vis: &ast.vis,
             generics: &ast.generics,
         })
     }
@@ -45,14 +41,15 @@ impl<'a> Context<'a> {
 
 /// Example:
 /// ```ignore
-/// #[items_from(types = [String, char], tuples = 2, collections = [vec, slice, array])]
 /// #[items_from(types(String, char), tuples(2), collections(vec, slice, array))]
+/// #[items_from(error_type = MyError)]
 /// ```
 #[derive(Default)]
 pub struct Attributes {
     pub types: Vec<syn::Type>,
     pub tuples: Option<usize>,
     pub collections: HashSet<CollectionType>,
+    pub error_type: Option<syn::Type>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -85,6 +82,7 @@ impl Attributes {
     const TYPES_IDENT: &str = "types";
     const TUPLES_IDENT: &str = "tuples";
     const COLLECTIONS_IDENT: &str = "collections";
+    const ERROR_TYPE_IDENT: &str = "error_type";
 
     fn try_from(attrs: &[Attribute]) -> syn::Result<Self> {
         let mut attributes = Attributes::default();
@@ -118,10 +116,17 @@ impl Attributes {
                                 .collections
                                 .extend(Self::parse_collections(tokens)?);
                         }
+
+                        // Handle `error_type(...)` syntax
+                        Meta::List(MetaList { path, tokens, .. })
+                            if path.is_ident(Self::ERROR_TYPE_IDENT) =>
+                        {
+                            attributes.error_type = Some(Self::parse_error_type(tokens)?);
+                        }
                         _ => {
                             return Err(syn::Error::new_spanned(
                                 &meta,
-                                "unknown attribute parameter; supported parameters are: types, tuples, collections",
+                                "unknown attribute parameter; supported parameters are: types, tuples, collections, error_type",
                             ));
                         }
                     }
@@ -155,6 +160,10 @@ impl Attributes {
             .into_iter()
             .map(|ident| CollectionType::try_from(ident))
             .collect::<Result<Vec<_>, _>>()
+    }
+
+    fn parse_error_type(tokens: &TokenStream) -> syn::Result<syn::Type> {
+        syn::parse2(tokens.clone()).map_err(|_| err(tokens, "expected type for `error_type`"))
     }
 }
 
