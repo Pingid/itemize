@@ -9,7 +9,7 @@ inside your function.
 ## Install
 
 ```bash
-cargo add --git https://github.com/Pingid/join
+cargo add --git https://github.com/Pingid/itemize
 ```
 
 ## Library
@@ -25,13 +25,15 @@ Common std types like `Vec`, arrays, slices, `Option`, `Result`, `HashSet`,
 ## Example
 
 ```rust
-use itemize::{TryIntoItems, TryIntoVariadicRows};
+use itemize::TryIntoItems;
 
 #[derive(Debug)]
 enum ParseError {
     BadInt(String),
 }
 
+#[derive(TryIntoItems)]
+#[items_from(types(String, char, &'a str), tuples(3), collections(vec, slice, array))]
 struct Answer(i64);
 
 impl TryFrom<&str> for Answer {
@@ -79,31 +81,3 @@ fn demo() -> Result<(), ParseError> {
     Ok(())
 }
 ```
-
-## Feature flags
-
-```toml
-# default: everything on
-itemize = { version = "0.1" }
-
-# or be explicit
-itemize = { version = "0.1", default-features = false, features = ["into_rows", "into_rows_variadic"] }
-```
-
-- `into_rows` – enables `IntoRows` / `TryIntoRows`.
-- `into_rows_variadic` – enables `IntoVariadicRows` / `TryIntoVariadicRows` and the `Either` type.
-
-`IntoItems` / `TryIntoItems` are always available.
-
----
-
-## Tuple support
-
-Tuple implementations for all traits are code-generated up to the arity given  
-by the `INTO_VEC_MAX_TUPLE_SIZE` environment variable (default: `12`):
-
-```bash
-INTO_VEC_MAX_TUPLE_SIZE=8 cargo build
-```
-
-This affects tuples for `IntoItems`, `IntoRows` and `IntoVariadicRows`.

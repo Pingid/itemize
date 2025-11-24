@@ -1,7 +1,0 @@
-[package]
-name = "itemize_testing"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-itemize = { path = "../itemize", features = ["derive"] }

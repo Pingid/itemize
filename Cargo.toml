@@ -1,7 +1,2 @@
 [workspace]
-members = [
-    "itemize",
-    "itemize_derive",
-    "itemize_derive_impl",
-    "itemize_testing",
-]
+members = ["itemize", "itemize_derive", "itemize_derive_impl"]

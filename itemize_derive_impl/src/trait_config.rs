@@ -84,22 +84,6 @@ impl TraitConfig {
         self.variant == TraitVariant::Try
     }
 
-    /// Generate a conversion expression from `source_expr` to `target_type`.
-    /// For Regular variant: `Target::from(source_expr)`
-    /// For Try variant: `Target::try_from(source_expr).map_err(Into::<E>::into)`
-    pub fn conversion_expr(
-        &self,
-        target_type: &TokenStream,
-        source_expr: TokenStream,
-    ) -> TokenStream {
-        if self.is_try() {
-            let error_type = self.error_type_tokens();
-            quote! { #target_type::try_from(#source_expr).map_err(Into::<#error_type>::into) }
-        } else {
-            self.wrap_conversion(quote! { #target_type::from(#source_expr) })
-        }
-    }
-
     pub fn iterator_item_type(&self, item_type: &TokenStream) -> TokenStream {
         match self.variant {
             TraitVariant::Regular => quote! { #item_type },
