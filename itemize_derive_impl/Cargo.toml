@@ -1,7 +1,13 @@
 [package]
 name = "itemize_derive_impl"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Implementation details for itemize derive macros"
+keywords = ["iterator", "derive", "macro"]
+categories = ["rust-patterns"]
 
 [dependencies]
 proc-macro2 = "1"

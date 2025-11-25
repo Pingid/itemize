@@ -1,10 +1,16 @@
 [package]
 name = "itemize_derive"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Derive macros for the itemize crate"
+keywords = ["iterator", "derive", "macro"]
+categories = ["rust-patterns"]
 
 [dependencies]
-itemize_derive_impl = { path = "../itemize_derive_impl" }
+itemize_derive_impl = { version = "0.1", path = "../itemize_derive_impl" }
 
 [lib]
 proc-macro = true

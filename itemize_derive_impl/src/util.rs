@@ -1,127 +1,237 @@
-use proc_macro2::{Ident, TokenStream};
+use std::collections::HashSet;
+
+use proc_macro2::TokenStream;
 use quote::{ToTokens, format_ident, quote};
+use syn::{Generics, Ident, Lifetime};
 
-use crate::context::Context;
-use crate::trait_config::TraitConfig;
-
-pub(crate) fn impl_generics_tokens(context: &Context, extra: &[TokenStream]) -> TokenStream {
-    let mut params: Vec<TokenStream> = extra.to_vec();
-    for param in context.generics.params.iter() {
-        params.push(param.to_token_stream());
-    }
-
-    if params.is_empty() {
-        TokenStream::new()
-    } else {
-        quote! { <#(#params),*> }
-    }
+pub(crate) fn tuple_type_ident(len: usize) -> Ident {
+    format_ident!("__A{}", len)
 }
 
-/// Build impl generics with proper ordering: lifetimes first, then error generic, then type/const params.
-pub(crate) fn build_ordered_impl_generics(
-    context: &Context,
-    config: &TraitConfig,
-    extra_params: &[TokenStream],
+pub(crate) fn item_ident() -> Ident {
+    format_ident!("__T")
+}
+
+pub(crate) fn const_ident() -> Ident {
+    format_ident!("__N")
+}
+
+pub(crate) fn tuple_items_impl(
+    len: usize,
+    f: impl Fn(Ident) -> TokenStream,
+    wrap: impl Fn(TokenStream) -> TokenStream,
 ) -> TokenStream {
-    let mut params = Vec::new();
+    let names = tuple_names(len);
+    let block = names
+        .iter()
+        .cloned()
+        .map(f)
+        .fold(quote! {}, |acc, x| match acc.is_empty() {
+            true => x,
+            false => quote! { #acc, #x },
+        });
 
-    // 1. Lifetime parameters from extra_params
-    for param in extra_params {
-        if param.to_string().starts_with('\'') {
-            params.push(param.clone());
-        }
+    let body = wrap(block);
+    let destructure = tuple_destructure(&names);
+    quote! {
+        #destructure
+        #body
     }
-
-    // 2. Error type parameter (if needed)
-    if config.needs_error_generic() {
-        params.push(config.error_type_tokens());
-    }
-
-    // 3. Non-lifetime parameters from extra_params
-    for param in extra_params {
-        if !param.to_string().starts_with('\'') {
-            params.push(param.clone());
-        }
-    }
-
-    impl_generics_tokens(context, &params)
 }
 
-pub(crate) fn tuple_type_params(prefix: &str, len: usize) -> Vec<Ident> {
-    (0..len)
-        .map(|index| format_ident!("{}{}", prefix, index))
-        .collect()
+/// Generates body for tuple IntoRows/TryIntoRows with Either wrapping.
+pub(crate) fn tuple_rows_impl(len: usize, f: impl Fn(Ident) -> TokenStream) -> TokenStream {
+    let names = tuple_names(len);
+    let destructure = tuple_destructure(&names);
+
+    let exprs = names.iter().enumerate().map(|(i, name)| {
+        let base = f(name.clone());
+        either_val(i, len, base)
+    });
+
+    quote! {
+        use itemize::either::Either::*;
+        #destructure
+        [#(#exprs),*].into_iter()
+    }
 }
 
-pub(crate) fn combine_where_clause(
-    context: &Context,
-    extra_predicates: impl IntoIterator<Item = TokenStream>,
+pub(crate) fn tuple_rows_associated(
+    len: usize,
+    iter_types: &[TokenStream],
+    for_type: impl ToTokens,
 ) -> TokenStream {
-    let mut predicates: Vec<TokenStream> = context
-        .where_clause
-        .map(|clause| {
-            clause
-                .predicates
-                .iter()
-                .map(|pred| pred.to_token_stream())
-                .collect()
-        })
-        .unwrap_or_default();
+    match len {
+        0 => quote! { ::std::iter::Empty<#for_type> },
+        1 => iter_types[0].clone(),
+        _ => either_type(iter_types),
+    }
+}
 
-    predicates.extend(extra_predicates);
+/// Builds a nested Either type from a list of types.
+fn either_type(types: &[TokenStream]) -> TokenStream {
+    match types.len() {
+        0 => panic!("either_type requires at least one type"),
+        1 => types[0].clone(),
+        _ => {
+            let head = &types[0];
+            let tail = either_type(&types[1..]);
+            quote! { itemize::Either<#head, #tail> }
+        }
+    }
+}
 
-    if predicates.is_empty() {
-        TokenStream::new()
+fn either_val(idx: usize, len: usize, expr: TokenStream) -> TokenStream {
+    if len == 1 {
+        expr
+    } else if idx == 0 {
+        quote! { Left(#expr) }
     } else {
-        quote! { where #(#predicates,)* }
+        let inner = either_val(idx - 1, len - 1, expr);
+        quote! { Right(#inner) }
     }
 }
 
-pub(crate) fn map_item_fn_tokens() -> TokenStream {
-    quote! {
-        fn map_item<Target, Item>(item: Item) -> Target
-        where
-            Target: ::std::convert::From<Item>,
-        {
-            Target::from(item)
+fn tuple_names(len: usize) -> Vec<Ident> {
+    (0..len).map(|i| format_ident!("a{}", i)).collect()
+}
+
+fn tuple_destructure(names: &[Ident]) -> TokenStream {
+    match names.len() {
+        0 => quote! {},
+        1 => {
+            let n = &names[0];
+            quote! { let (#n,) = self; }
+        }
+        _ => quote! { let (#(#names),*) = self; },
+    }
+}
+
+pub(crate) struct GenericList {
+    params: Vec<GenericParam>,
+}
+
+#[derive(Clone)]
+pub(crate) enum GenericParam {
+    Lifetime(TokenStream),
+    Const(TokenStream),
+    Type(TokenStream),
+}
+
+impl ToTokens for GenericParam {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self {
+            GenericParam::Lifetime(p) => p.to_tokens(tokens),
+            GenericParam::Const(p) => p.to_tokens(tokens),
+            GenericParam::Type(p) => p.to_tokens(tokens),
         }
     }
 }
 
-pub(crate) fn map_row_fn_tokens() -> TokenStream {
-    quote! {
-        fn map_row<Target, Item>(item: Item) -> <Item as itemize::IntoItems<Target>>::IntoIter
-        where
-            Item: itemize::IntoItems<Target>,
-        {
-            item.into_items()
+impl GenericList {
+    pub(crate) fn new() -> Self {
+        Self { params: Vec::new() }
+    }
+
+    pub(crate) fn with_types<T: ToTokens>(mut self, ts: impl IntoIterator<Item = T>) -> Self {
+        for t in ts {
+            self.params.push(GenericParam::Type(t.to_token_stream()));
+        }
+        self
+    }
+
+    pub(crate) fn with_lifetimes<T: ToTokens>(mut self, ts: impl IntoIterator<Item = T>) -> Self {
+        for t in ts {
+            self.params
+                .push(GenericParam::Lifetime(t.to_token_stream()));
+        }
+        self
+    }
+
+    pub(crate) fn with_consts<T: ToTokens>(mut self, ts: impl IntoIterator<Item = T>) -> Self {
+        for t in ts {
+            self.params.push(GenericParam::Const(t.to_token_stream()));
+        }
+        self
+    }
+
+    pub(crate) fn with_generics(mut self, generics: &Generics) -> Self {
+        for t in &generics.params {
+            match t {
+                syn::GenericParam::Lifetime(lifetime) => self
+                    .params
+                    .push(GenericParam::Lifetime(lifetime.to_token_stream())),
+                syn::GenericParam::Const(const_) => self
+                    .params
+                    .push(GenericParam::Const(const_.to_token_stream())),
+                syn::GenericParam::Type(type_) => self
+                    .params
+                    .push(GenericParam::Type(type_.to_token_stream())),
+            }
+        }
+        self
+    }
+
+    pub(crate) fn with_lifetimes_from_type(mut self, ty: &syn::Type) -> Self {
+        let mut seen: HashSet<String> = self
+            .params
+            .iter()
+            .filter_map(|p| match p {
+                // Extract lifetime name, handling bounds like "'a: 'static" -> "'a"
+                GenericParam::Lifetime(ts) => ts
+                    .to_string()
+                    .split_whitespace()
+                    .next()
+                    .map(|s| s.to_string()),
+                _ => None,
+            })
+            .collect();
+
+        for lifetime in extract_lifetimes_types(ty) {
+            if seen.insert(lifetime.to_string()) {
+                self.params
+                    .push(GenericParam::Lifetime(lifetime.to_token_stream()));
+            }
+        }
+        self
+    }
+}
+
+impl ToTokens for GenericList {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let mut params = self.params.clone();
+        params.sort_by_key(|param| match param {
+            GenericParam::Lifetime(_) => 0,
+            GenericParam::Const(_) => 1,
+            GenericParam::Type(_) => 2,
+        });
+        if !params.is_empty() {
+            tokens.extend(quote! { <#(#params),*> })
         }
     }
 }
 
-pub(crate) fn extract_lifetimes(ty: &syn::Type) -> Vec<TokenStream> {
+pub(crate) fn extract_lifetimes_types(ty: &syn::Type) -> Vec<&Lifetime> {
     let mut lifetimes = Vec::new();
 
     match ty {
         syn::Type::Reference(ref_ty) => {
             if let Some(lifetime) = &ref_ty.lifetime {
-                lifetimes.push(lifetime.to_token_stream());
+                lifetimes.push(lifetime);
             }
-            lifetimes.extend(extract_lifetimes(&ref_ty.elem));
+            lifetimes.extend(extract_lifetimes_types(&ref_ty.elem));
         }
         syn::Type::Path(path_ty) => {
             if let Some(qself) = &path_ty.qself {
-                lifetimes.extend(extract_lifetimes(&qself.ty));
+                lifetimes.extend(extract_lifetimes_types(&qself.ty));
             }
             for segment in &path_ty.path.segments {
                 if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
                     for arg in &args.args {
                         match arg {
-                            syn::GenericArgument::Lifetime(lt) => {
-                                lifetimes.push(lt.to_token_stream())
-                            }
+                            syn::GenericArgument::Lifetime(lt) => lifetimes.push(lt),
                             syn::GenericArgument::Type(ty) => {
-                                lifetimes.extend(extract_lifetimes(ty))
+                                lifetimes.extend(extract_lifetimes_types(ty))
                             }
                             _ => {}
                         }
@@ -131,14 +241,14 @@ pub(crate) fn extract_lifetimes(ty: &syn::Type) -> Vec<TokenStream> {
         }
         syn::Type::Tuple(tuple_ty) => {
             for elem in &tuple_ty.elems {
-                lifetimes.extend(extract_lifetimes(elem));
+                lifetimes.extend(extract_lifetimes_types(elem));
             }
         }
         syn::Type::Array(array_ty) => {
-            lifetimes.extend(extract_lifetimes(&array_ty.elem));
+            lifetimes.extend(extract_lifetimes_types(&array_ty.elem));
         }
         syn::Type::Slice(slice_ty) => {
-            lifetimes.extend(extract_lifetimes(&slice_ty.elem));
+            lifetimes.extend(extract_lifetimes_types(&slice_ty.elem));
         }
         _ => {}
     }

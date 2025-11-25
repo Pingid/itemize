@@ -3,20 +3,19 @@ use std::collections::HashSet;
 use proc_macro2::TokenStream;
 use quote::{ToTokens, quote};
 use syn::parse::Parser;
-use syn::{Attribute, DeriveInput, Meta, MetaList, TypeGenerics, WhereClause};
+use syn::{Attribute, DeriveInput, Meta, MetaList};
 
-pub struct Context<'a> {
-    pub attributes: Attributes,
-    pub ident: &'a syn::Ident,
-    pub ty_generics: TypeGenerics<'a>,
-    pub where_clause: Option<&'a WhereClause>,
-    pub where_predicates: Option<Vec<TokenStream>>,
-    pub generics: &'a syn::Generics,
-    pub for_type: TokenStream,
+use crate::util::GenericList;
+
+pub(crate) struct Context<'a> {
+    pub(crate) attributes: Attributes,
+    pub(crate) where_predicates: Option<Vec<TokenStream>>,
+    pub(crate) generics: &'a syn::Generics,
+    pub(crate) concrete: TokenStream,
 }
 
 impl<'a> Context<'a> {
-    pub fn try_new(ast: &'a DeriveInput) -> syn::Result<Self> {
+    pub(crate) fn try_new(ast: &'a DeriveInput) -> syn::Result<Self> {
         // Validate that this is being used on a struct or enum
         match &ast.data {
             syn::Data::Struct(_) | syn::Data::Enum(_) => {}
@@ -31,7 +30,7 @@ impl<'a> Context<'a> {
         let ident = &ast.ident;
         let (_, ty_generics, where_clause) = ast.generics.split_for_impl();
 
-        let for_type = quote! { #ident #ty_generics };
+        let concrete = quote! { #ident #ty_generics };
         let where_predicates = where_clause.map(|clause| {
             clause
                 .predicates
@@ -41,37 +40,62 @@ impl<'a> Context<'a> {
         });
         Ok(Self {
             attributes: Attributes::try_from(&ast.attrs)?,
-            ident,
-            ty_generics,
-            where_clause,
             generics: &ast.generics,
             where_predicates,
-            for_type,
+            concrete,
         })
     }
 
-    pub fn where_with(&self, additional: TokenStream) -> TokenStream {
-        let mut where_clause = self.where_predicates.clone().unwrap_or_default();
-        where_clause.push(additional);
-        quote! { where #(#where_clause,)* }
+    pub(crate) fn generics(&self) -> GenericList {
+        GenericList::new().with_generics(self.generics)
+    }
+
+    pub(crate) fn error_generics(&self) -> GenericList {
+        match &self.attributes.error_type {
+            Some(_) => self.generics(),
+            None => self.generics().with_types(self.error_ty()),
+        }
+    }
+
+    pub(crate) fn error_ty(&self) -> TokenStream {
+        match &self.attributes.error_type {
+            Some(ty) => quote! { #ty },
+            None => quote! { E },
+        }
     }
 }
 
 /// Example:
 /// ```ignore
-/// #[items_from(types(String, char), tuples(2), collections(vec, slice, array))]
-/// #[items_from(error_type = MyError)]
+/// #[items_from(types(String, char), tuples, collections(vec, slice, array))]
+/// #[items_from(tuples(1..=4))]  // explicit range
+/// #[items_from(tuples(2..=4))]  // excludes 1-tuples
+/// #[items_from(tuples(4))]      // shorthand for 1..=4
+/// #[items_from(tuples(exact(4)))] // only size 4
+/// #[items_from(error_type(MyError))]
 /// ```
 #[derive(Default)]
-pub struct Attributes {
+pub(crate) struct Attributes {
     pub types: Vec<syn::Type>,
-    pub tuples: Option<usize>,
+    pub tuples: Option<TupleRange>,
     pub collections: HashSet<CollectionType>,
     pub error_type: Option<syn::Type>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct TupleRange {
+    pub start: usize,
+    pub end: usize,
+}
+
+impl TupleRange {
+    pub fn iter(self) -> std::ops::RangeInclusive<usize> {
+        self.start..=self.end
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum CollectionType {
+pub(crate) enum CollectionType {
     Vec,
     Slice,
     Array,
@@ -99,6 +123,7 @@ impl Attributes {
     const PATH_IDENT: &str = "items_from";
     const TYPES_IDENT: &str = "types";
     const TUPLES_IDENT: &str = "tuples";
+    const DEFAULT_TUPLES: TupleRange = TupleRange { start: 1, end: 6 };
     const COLLECTIONS_IDENT: &str = "collections";
     const ERROR_TYPE_IDENT: &str = "error_type";
 
@@ -119,7 +144,10 @@ impl Attributes {
                             attributes.types = Self::parse_types(tokens)?;
                         }
 
-                        // Handle `tuples(2)` syntax
+                        // Handle `tuples` or `tuples(N)` syntax
+                        Meta::Path(path) if path.is_ident(Self::TUPLES_IDENT) => {
+                            attributes.tuples = Some(Self::DEFAULT_TUPLES);
+                        }
                         Meta::List(MetaList { path, tokens, .. })
                             if path.is_ident(Self::TUPLES_IDENT) =>
                         {
@@ -163,11 +191,45 @@ impl Attributes {
         Ok(types.into_iter().collect())
     }
 
-    fn parse_tuples(tokens: &TokenStream) -> syn::Result<usize> {
-        let lit: syn::LitInt = syn::parse2(tokens.clone())
-            .map_err(|_| err(tokens, "expected integer for `tuples`"))?;
-        lit.base10_parse()
-            .map_err(|_| err(tokens, "invalid integer for `tuples`"))
+    fn parse_tuples(tokens: &TokenStream) -> syn::Result<TupleRange> {
+        syn::parse::Parser::parse2(Self::parse_tuple_range, tokens.clone())
+    }
+
+    fn parse_tuple_range(input: syn::parse::ParseStream) -> syn::Result<TupleRange> {
+        // Try parsing as exact(N)
+        if input.peek(syn::Ident) {
+            let ident: syn::Ident = input.parse()?;
+            if ident == "exact" {
+                let content;
+                syn::parenthesized!(content in input);
+                let lit: syn::LitInt = content.parse()?;
+                let n: usize = lit.base10_parse()?;
+                return Ok(TupleRange { start: n, end: n });
+            }
+            return Err(syn::Error::new_spanned(ident, "expected `exact`"));
+        }
+
+        // Try parsing as range (1..=4) or shorthand (4)
+        let start: syn::LitInt = input.parse()?;
+        let start_val: usize = start.base10_parse()?;
+
+        // Check for range syntax
+        if input.peek(syn::Token![..]) {
+            input.parse::<syn::Token![..]>()?;
+            input.parse::<syn::Token![=]>()?;
+            let end: syn::LitInt = input.parse()?;
+            let end_val: usize = end.base10_parse()?;
+            Ok(TupleRange {
+                start: start_val,
+                end: end_val,
+            })
+        } else {
+            // Shorthand: N means 1..=N
+            Ok(TupleRange {
+                start: 1,
+                end: start_val,
+            })
+        }
     }
 
     fn parse_collections(tokens: &TokenStream) -> syn::Result<Vec<CollectionType>> {
@@ -176,7 +238,7 @@ impl Attributes {
 
         idents
             .into_iter()
-            .map(|ident| CollectionType::try_from(ident))
+            .map(CollectionType::try_from)
             .collect::<Result<Vec<_>, _>>()
     }
 

@@ -1,3 +1,5 @@
+use crate::{IntoItems, TryIntoItems};
+
 /// Either type for composing heterogeneous iterators through nesting.
 ///
 /// This enum allows two different iterator types to be unified into a single type,
@@ -8,6 +10,36 @@
 pub enum Either<L, R> {
     Left(L),
     Right(R),
+}
+
+impl<Item, L, R> IntoItems<Item> for Either<L, R>
+where
+    L: IntoItems<Item>,
+    R: IntoItems<Item, IntoIter = L::IntoIter>,
+{
+    type IntoIter = Either<L::IntoIter, R::IntoIter>;
+
+    fn into_items(self) -> Self::IntoIter {
+        match self {
+            Either::Left(l) => Either::Left(l.into_items()),
+            Either::Right(r) => Either::Right(r.into_items()),
+        }
+    }
+}
+
+impl<Item, E, L, R> TryIntoItems<Item, E> for Either<L, R>
+where
+    L: TryIntoItems<Item, E>,
+    R: TryIntoItems<Item, E, IntoIter = L::IntoIter>,
+{
+    type IntoIter = Either<L::IntoIter, R::IntoIter>;
+
+    fn try_into_items(self) -> Self::IntoIter {
+        match self {
+            Either::Left(l) => Either::Left(l.try_into_items()),
+            Either::Right(r) => Either::Right(r.try_into_items()),
+        }
+    }
 }
 
 impl<L, R, T> Iterator for Either<L, R>
