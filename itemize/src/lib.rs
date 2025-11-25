@@ -1,6 +1,9 @@
 #[cfg(feature = "derive")]
 pub use itemize_derive::*;
 
+pub mod either;
+pub use either::Either;
+
 pub trait IntoItems<Item> {
     type IntoIter: ::std::iter::Iterator<Item = Item>;
     fn into_items(self) -> Self::IntoIter;

@@ -98,3 +98,50 @@ pub(crate) fn map_row_fn_tokens() -> TokenStream {
         }
     }
 }
+
+pub(crate) fn extract_lifetimes(ty: &syn::Type) -> Vec<TokenStream> {
+    let mut lifetimes = Vec::new();
+
+    match ty {
+        syn::Type::Reference(ref_ty) => {
+            if let Some(lifetime) = &ref_ty.lifetime {
+                lifetimes.push(lifetime.to_token_stream());
+            }
+            lifetimes.extend(extract_lifetimes(&ref_ty.elem));
+        }
+        syn::Type::Path(path_ty) => {
+            if let Some(qself) = &path_ty.qself {
+                lifetimes.extend(extract_lifetimes(&qself.ty));
+            }
+            for segment in &path_ty.path.segments {
+                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                    for arg in &args.args {
+                        match arg {
+                            syn::GenericArgument::Lifetime(lt) => {
+                                lifetimes.push(lt.to_token_stream())
+                            }
+                            syn::GenericArgument::Type(ty) => {
+                                lifetimes.extend(extract_lifetimes(ty))
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+        syn::Type::Tuple(tuple_ty) => {
+            for elem in &tuple_ty.elems {
+                lifetimes.extend(extract_lifetimes(elem));
+            }
+        }
+        syn::Type::Array(array_ty) => {
+            lifetimes.extend(extract_lifetimes(&array_ty.elem));
+        }
+        syn::Type::Slice(slice_ty) => {
+            lifetimes.extend(extract_lifetimes(&slice_ty.elem));
+        }
+        _ => {}
+    }
+
+    lifetimes
+}

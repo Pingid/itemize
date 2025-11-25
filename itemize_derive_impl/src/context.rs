@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use proc_macro2::TokenStream;
-use quote::ToTokens;
+use quote::{ToTokens, quote};
 use syn::parse::Parser;
 use syn::{Attribute, DeriveInput, Meta, MetaList, TypeGenerics, WhereClause};
 
@@ -10,7 +10,9 @@ pub struct Context<'a> {
     pub ident: &'a syn::Ident,
     pub ty_generics: TypeGenerics<'a>,
     pub where_clause: Option<&'a WhereClause>,
+    pub where_predicates: Option<Vec<TokenStream>>,
     pub generics: &'a syn::Generics,
+    pub for_type: TokenStream,
 }
 
 impl<'a> Context<'a> {
@@ -29,13 +31,29 @@ impl<'a> Context<'a> {
         let ident = &ast.ident;
         let (_, ty_generics, where_clause) = ast.generics.split_for_impl();
 
+        let for_type = quote! { #ident #ty_generics };
+        let where_predicates = where_clause.map(|clause| {
+            clause
+                .predicates
+                .iter()
+                .map(|pred| pred.to_token_stream())
+                .collect::<Vec<_>>()
+        });
         Ok(Self {
             attributes: Attributes::try_from(&ast.attrs)?,
             ident,
             ty_generics,
             where_clause,
             generics: &ast.generics,
+            where_predicates,
+            for_type,
         })
+    }
+
+    pub fn where_with(&self, additional: TokenStream) -> TokenStream {
+        let mut where_clause = self.where_predicates.clone().unwrap_or_default();
+        where_clause.push(additional);
+        quote! { where #(#where_clause,)* }
     }
 }
 
