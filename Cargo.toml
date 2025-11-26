@@ -1,14 +1,10 @@
-[package]
-name = "itemize"
-version = "0.0.1"
+[workspace]
+resolver = "3"
+members = ["itemize", "itemize_derive", "itemize_derive_impl"]
+
+[workspace.package]
+version = "0.1.0"
 edition = "2024"
-
-[features]
-# IntoItems is always available; rows are feature-gated.
-default = ["into_rows", "into_rows_variadic"]
-
-# Enables IntoRows / TryIntoRows
-into_rows = []
-
-# Enables IntoVariadicRows / TryIntoVariadicRows (and IntoRows)
-into_rows_variadic = ["into_rows"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Pingid/itemize"
+authors = ["Dan Beaven"]
