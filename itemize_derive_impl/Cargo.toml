@@ -1,0 +1,21 @@
+[package]
+name = "itemize_derive_impl"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Implementation details for itemize derive macros"
+keywords = ["iterator", "derive", "macro"]
+categories = ["rust-patterns"]
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", default-features = false, features = [
+    "derive",
+    "parsing",
+    "printing",
+    "proc-macro",
+    "clone-impls",
+] }
